@@ -45,19 +45,19 @@ type MessageAttachment struct {
 // PostMessage is a payload to be sent with chat.postMessage method.
 // See https://api.slack.com/methods/chat.postMessage
 type PostMessage struct {
-	ChannelID       event.ChannelID
-	Text            string
-	Parse           ParseMode
-	LinkNames       int
-	Attachments     []*MessageAttachment
-	UnfurlLinks     bool
-	UnfurlMedia     bool
-	UserName        string
-	AsUser          bool
-	IconURL         string
-	IconEmoji       string
-	ReplyBroadcast  bool
-	ThreadTimeStamp string
+	ChannelID       event.ChannelID      `json:"channel"`
+	Text            string               `json:"text"`
+	Parse           ParseMode            `json:"parse,omitempty"`
+	LinkNames       int                  `json:"link_names,omitempty"`
+	Attachments     []*MessageAttachment `json:"attachments,omitempty"`
+	UnfurlLinks     bool                 `json:"unfurl_links,omitempty"`
+	UnfurlMedia     bool                 `json:"unfurl_media,omitempty"`
+	UserName        string               `json:"username,omitempty"`
+	AsUser          bool                 `json:"as_user,omitempty"`
+	IconURL         string               `json:"icon_url,omitempty"`
+	IconEmoji       string               `json:"icon_emoji,omitempty"`
+	ReplyBroadcast  bool                 `json:"reply_broadcast,omitempty"`
+	ThreadTimeStamp string               `json:"thread_ts,omitempty"`
 }
 
 // WithAttachments sets/overrides attachments parameter for current PostMessage.

@@ -1,6 +1,7 @@
 package webapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -66,7 +67,7 @@ func buildEndpoint(slackMethod string, queryParams url.Values) *url.URL {
 	return requestURL
 }
 
-func (client *Client) Get(ctx context.Context, slackMethod string, queryParams url.Values, intf interface{}) error {
+func (client *Client) Get(ctx context.Context, slackMethod string, queryParams url.Values, response interface{}) error {
 	// Prepare request
 	endpoint := buildEndpoint(slackMethod, queryParams)
 	req, err := http.NewRequest(http.MethodGet, endpoint.String(), nil)
@@ -92,7 +93,7 @@ func (client *Client) Get(ctx context.Context, slackMethod string, queryParams u
 	}
 
 	// Handle response body
-	err = json.NewDecoder(resp.Body).Decode(&intf)
+	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
 		return err
 	}
@@ -116,10 +117,10 @@ func statusErr(resp *http.Response) error {
 	return fmt.Errorf("response status error. Status: %d.\nRequest: %s\nResponse: %s", resp.StatusCode, string(reqDump), string(resDump))
 }
 
-func (client *Client) Post(ctx context.Context, slackMethod string, bodyParam url.Values, intf interface{}) error {
+func (client *Client) Post(ctx context.Context, slackMethod string, payload url.Values, response interface{}) error {
 	// Prepare request
 	endpoint := buildEndpoint(slackMethod, nil)
-	req, err := http.NewRequest("POST", endpoint.String(), strings.NewReader(bodyParam.Encode()))
+	req, err := http.NewRequest("POST", endpoint.String(), strings.NewReader(payload.Encode()))
 	if err != nil {
 		return err
 	}
@@ -143,7 +144,46 @@ func (client *Client) Post(ctx context.Context, slackMethod string, bodyParam ur
 	}
 
 	// Handle response body
-	err = json.NewDecoder(resp.Body).Decode(&intf)
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (client *Client) PostJSON(ctx context.Context, slackMethod string, payload interface{}, response interface{}) error {
+	// Prepare request
+	endpoint := buildEndpoint(slackMethod, nil)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s\n", string(body))
+	req, err := http.NewRequest("POST", endpoint.String(), bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	reqCtx, cancel := context.WithTimeout(ctx, client.config.RequestTimeout)
+	defer cancel()
+	req.WithContext(reqCtx)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.config.Token))
+
+	// Do request
+	resp, err := client.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Usually, the API returns a JSON structure with status code 200.
+	// https://api.slack.com/web#evaluating_responses
+	if resp.StatusCode != http.StatusOK {
+		return statusErr(resp)
+	}
+
+	// Handle response body
+	err = json.NewDecoder(resp.Body).Decode(&response)
 	if err != nil {
 		return err
 	}

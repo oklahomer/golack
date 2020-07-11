@@ -16,16 +16,21 @@ import (
 )
 
 type DummyWebClient struct {
-	GetFunc  func(ctx context.Context, slackMethod string, queryParams url.Values, intf interface{}) error
-	PostFunc func(ctx context.Context, slackMethod string, bodyParam url.Values, intf interface{}) error
+	GetFunc      func(ctx context.Context, slackMethod string, queryParams url.Values, response interface{}) error
+	PostFunc     func(ctx context.Context, slackMethod string, payload url.Values, response interface{}) error
+	PostJSONFunc func(ctx context.Context, slackMethod string, payload interface{}, response interface{}) error
 }
 
-func (wc *DummyWebClient) Get(ctx context.Context, slackMethod string, queryParams url.Values, intf interface{}) error {
-	return wc.GetFunc(ctx, slackMethod, queryParams, intf)
+func (wc *DummyWebClient) Get(ctx context.Context, slackMethod string, queryParams url.Values, response interface{}) error {
+	return wc.GetFunc(ctx, slackMethod, queryParams, response)
 }
 
-func (wc *DummyWebClient) Post(ctx context.Context, slackMethod string, bodyParam url.Values, intf interface{}) error {
-	return wc.PostFunc(ctx, slackMethod, bodyParam, intf)
+func (wc *DummyWebClient) Post(ctx context.Context, slackMethod string, payload url.Values, response interface{}) error {
+	return wc.PostFunc(ctx, slackMethod, payload, response)
+}
+
+func (wc *DummyWebClient) PostJSON(ctx context.Context, slackMethod string, payload interface{}, response interface{}) error {
+	return wc.PostJSONFunc(ctx, slackMethod, payload, response)
 }
 
 type DummyReceiver struct {
@@ -82,7 +87,7 @@ func TestGolack_PostMessage(t *testing.T) {
 	t.Run("Web API returns error status", func(t *testing.T) {
 		expectedErr := xerrors.New("DUMMY")
 		webClient := &DummyWebClient{
-			PostFunc: func(_ context.Context, _ string, _ url.Values, _ interface{}) error {
+			PostJSONFunc: func(_ context.Context, _ string, _ interface{}, _ interface{}) error {
 				return expectedErr
 			},
 		}
@@ -101,10 +106,10 @@ func TestGolack_PostMessage(t *testing.T) {
 
 	t.Run("Web API returns error response", func(t *testing.T) {
 		webClient := &DummyWebClient{
-			PostFunc: func(_ context.Context, _ string, _ url.Values, intf interface{}) error {
-				response := intf.(*webapi.APIResponse)
-				response.OK = false
-				response.Error = "some error"
+			PostJSONFunc: func(_ context.Context, _ string, _ interface{}, response interface{}) error {
+				resp := response.(*webapi.APIResponse)
+				resp.OK = false
+				resp.Error = "some error"
 				return nil
 			},
 		}
@@ -120,10 +125,15 @@ func TestGolack_PostMessage(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		webClient := &DummyWebClient{
-			PostFunc: func(_ context.Context, _ string, _ url.Values, intf interface{}) error {
-				response := intf.(*webapi.APIResponse)
-				response.OK = true
-				response.Error = ""
+			PostJSONFunc: func(_ context.Context, _ string, payload interface{}, response interface{}) error {
+				message := payload.(*webapi.PostMessage)
+				if message.ChannelID != "channel" && message.Text != "my message" {
+					t.Errorf("Expected payload is not passed: %+v", message)
+				}
+
+				resp := response.(*webapi.APIResponse)
+				resp.OK = true
+				resp.Error = ""
 				return nil
 			},
 		}
@@ -167,10 +177,10 @@ func TestGolack_ConnectRTM(t *testing.T) {
 
 	t.Run("Web API returns error response", func(t *testing.T) {
 		webClient := &DummyWebClient{
-			GetFunc: func(_ context.Context, _ string, _ url.Values, intf interface{}) error {
-				response := intf.(*webapi.RTMStart)
-				response.OK = false
-				response.Error = "some error"
+			GetFunc: func(_ context.Context, _ string, _ url.Values, response interface{}) error {
+				resp := response.(*webapi.RTMStart)
+				resp.OK = false
+				resp.Error = "some error"
 				return nil
 			},
 		}
@@ -187,11 +197,11 @@ func TestGolack_ConnectRTM(t *testing.T) {
 	t.Run("connect WebSocket server", func(t *testing.T) {
 		testutil.RunWithWebSocket(func(addr net.Addr) {
 			webClient := &DummyWebClient{
-				GetFunc: func(_ context.Context, _ string, _ url.Values, intf interface{}) error {
-					response := intf.(*webapi.RTMStart)
-					response.OK = true
-					response.URL = fmt.Sprintf("ws://%s%s", addr, "/ping")
-					response.Error = ""
+				GetFunc: func(_ context.Context, _ string, _ url.Values, response interface{}) error {
+					resp := response.(*webapi.RTMStart)
+					resp.OK = true
+					resp.URL = fmt.Sprintf("ws://%s%s", addr, "/ping")
+					resp.Error = ""
 					return nil
 				},
 			}
