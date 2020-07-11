@@ -271,6 +271,98 @@ func TestClient_Post(t *testing.T) {
 	})
 }
 
+func TestClient_PostJSON(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		token := "abc"
+		mux := http.NewServeMux()
+		mux.HandleFunc("/api/foo", func(w http.ResponseWriter, req *http.Request) {
+			auth := req.Header.Get(AuthHeaderName)
+			if len(auth) == 0 {
+				t.Fatal("Authorization header is not given")
+			}
+
+			tokenVal := auth[len(AuthBearerSchema):]
+			if tokenVal != token {
+				t.Errorf("Expected token value is not given: %s", auth)
+			}
+
+			defer req.Body.Close()
+			message := &PostMessage{}
+			json.NewDecoder(req.Body).Decode(message)
+			if message.Text != "hello" {
+				t.Errorf("Expected parameter is not passed: %+v", message)
+			}
+
+			w.WriteHeader(http.StatusOK)
+
+			response := &APIResponse{OK: true}
+			bytes, _ := json.Marshal(response)
+			w.Write(bytes)
+		})
+
+		client := &Client{
+			config: &Config{
+				Token:          token,
+				RequestTimeout: 3 * time.Second,
+			},
+			httpClient: &http.Client{Transport: &localRoundTripper{mux: mux}},
+		}
+
+		returnedResponse := &APIResponse{}
+		payload := &PostMessage{Text: "hello"}
+		err := client.PostJSON(context.TODO(), "foo", payload, returnedResponse)
+
+		if err != nil {
+			t.Errorf("something is wrong. %#v", err)
+		}
+	})
+
+	t.Run("status error", func(t *testing.T) {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/api/foo", func(w http.ResponseWriter, req *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		})
+		tripper := &localRoundTripper{mux: mux}
+		client := &Client{
+			config: &Config{
+				Token:          "abc",
+				RequestTimeout: 3 * time.Second,
+			},
+			httpClient: &http.Client{Transport: tripper},
+		}
+
+		returnedResponse := &APIResponse{}
+		err := client.PostJSON(context.TODO(), "foo", &PostMessage{}, returnedResponse)
+
+		if err == nil {
+			t.Error("error should return when 500 is given.")
+		}
+	})
+
+	t.Run("JSON error", func(t *testing.T) {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/api/foo", func(w http.ResponseWriter, req *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("invalid json"))
+		})
+		tripper := &localRoundTripper{mux: mux}
+		client := &Client{
+			config: &Config{
+				Token:          "abc",
+				RequestTimeout: 3 * time.Second,
+			},
+			httpClient: &http.Client{Transport: tripper},
+		}
+
+		returnedResponse := &APIResponse{}
+		err := client.PostJSON(context.TODO(), "foo", &PostMessage{}, returnedResponse)
+
+		if err == nil {
+			t.Error("error should return")
+		}
+	})
+}
+
 type localRoundTripper struct {
 	mux *http.ServeMux
 }

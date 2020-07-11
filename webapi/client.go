@@ -158,7 +158,6 @@ func (client *Client) PostJSON(ctx context.Context, slackMethod string, payload 
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s\n", string(body))
 	req, err := http.NewRequest("POST", endpoint.String(), bytes.NewReader(body))
 	if err != nil {
 		return err
